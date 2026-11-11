@@ -1,0 +1,131 @@
+* ----------------------------------------------------------------------------------------------------------------
+* Utopia model: Annual timeslice level + Addition of import process of gas and residential gas/oil heating
+* + Addition of Diesel as input fuel for RHG	+ Addition of CO2 emissions directly to the processes
+* + Addition of natural gas combined-cycle power plant
+* + Changing combined-cycle power plant to backpressure CHP plant
+* + Changing BP power plant to extraction condensing turbine
+* + Adding time slices, load curves, reserve capacity, different types of availabilities
+* ----------------------------------------------------------------------------------------------------------------
+$TITLE  TIMES -- VERSION 1.0
+OPTION LIMROW=20000, LIMCOL=0, SOLPRINT=ON, ITERLIM=50000;
+OPTION RESLIM=50000, PROFILE=1, SOLVEOPT=REPLACE;
+OPTION LP=CPLEX;
+OPTION SYSOUT=ON;
+$OFFLISTING
+*$ONLISTING
+
+* activate validation to force VAR_CAP/COMPRD and "square" obj costing
+$SET VALIDATE 'NO'
+*--------------------------------------------------------------*
+* BATINCLUDE calls should all be with lower case file names!!! *
+*--------------------------------------------------------------*
+
+* initialize the environment variables
+$   SET DEBUG                          'NO'
+$   SET DUMPSOL                        'NO'
+$   SET SOLVEDA                        'YES'
+$   SET SOLANS                         'NO'
+$   SET SOLVE_NOW                      'YES'
+$   SET MODEL_NAME                     'TIMES'
+$   SET REDUCE                         'YES'
+$   IF DECLARED REG      $SET STARTRUN 'RESTART'
+$   IF NOT DECLARED REG  $SET STARTRUN 'SCRATCH'
+$SET OBJ AUTO
+$SET VDA YES
+$SET VAR_UC YES
+$SET ZON YES
+
+* KILL old user values if running from restart
+*$   IF DECLARED REG  $BATINCLUDE initclr.mod
+
+* merge declarations & data
+$   ONMULTI
+
+* the times-slices MUST come 1st to ensure ordering OK
+         SET   ALL_TS
+            /
+               ANNUAL 'Annual'
+               SU     'Summer'
+	       WI     'Winter'
+               SUD    'Summer Day'
+		SUN    'Summer Night'
+		WID	 'Winter Day'
+		WIN	 'Winter Night'
+		/;
+
+* perform fixed declarations
+$BATINCLUDE initsys.mod
+
+* declare the (system/user) empties
+$BATINCLUDE initmty.mod
+
+* convert 0 => EPS
+*$   ONEPS
+
+* accept the actual scenario data
+$   BATINCLUDE SIMPLE.dd
+
+$   SET RUN_NAME SIMPLE
+;
+
+SET MILESTONYR / 2005, 2010, 2020, 2030 /;
+
+g_dyear = 2005;
+*-----------------------------------------------------------
+  SET ALL_REG / REH, REJ /;
+  SET REG / REH, REJ /;
+  SET DATAYEAR / 2029, 2031 /;
+
+  PARAMETER REG_ZOOM / REG.2030 1 /;
+  SET REG_SRMAP /  REG.REH, REG.REJ /;
+
+  PARAMETER ZOOM_SHAR / REJ.2010.DEM.N 0.25 /;
+
+SET PRC / PASTIP, RESIDP /;
+SET TOP /
+REG.PASTIP.NUC.OUT
+REG.RESIDP.NUC.OUT
+/;
+PARAMETER NCAP_PASTI /
+REG.2000.PASTIP 2
+REG.2005.PASTIP 2
+/;
+PARAMETER PRC_RESID /
+REG.2005.RESIDP 1
+REG.2010.RESIDP .9
+REG.2020.RESIDP .7
+/;
+PARAMETER NCAP_TLIFE /
+REG.2010.PASTIP 40
+REG.2010.RESIDP 40
+/;
+PARAMETER ACT_COST /
+REG.2010.PASTIP.CUR 1
+REG.2010.RESIDP.CUR 1
+/;
+
+*SET PRC_VINT / REG.PASTIP /;
+PARAMETER ACT_BND /
+REG.2031.PASTIP.ANNUAL.UP 5
+/;
+$ONEMPTY
+SET PRC_RCAP //;
+
+PARAMETER NCAP_COST /
+REJ.2005.PASTIP.CUR 500
+/;
+PARAMETER COM_CSTNET /
+REJ.2010.CO2.ANNUAL.CUR 0.1
+/;
+PARAMETER FLO_EMIS /
+REG.2010.ECOA0.ELCCOA.CO2.ANNUAL 90
+/;
+*-----------------------------------------------------------
+* do the rest
+$   BATINCLUDE maindrv.mod mod
+
+DISPLAY ZR0, ZRZ, ZRSR, ZR_ZLV, ZOOM_SHAR, reg_zoom;
+DISPLAY RTREG;
+DISPLAY COM_PROJ, NCAP_PASTI, PRC_RESID;
+DISPLAY VAR_ACT.UP,act_bnd,VAR_NCAP.LO,NCAP_BND;
+DISPLAY NCAP_COST,COM_CSTNET,OBJ_LINT;
