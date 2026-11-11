@@ -1,0 +1,59 @@
+*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+* Copyright (C) 2000-2023 Energy Technology Systems Analysis Programme (ETSAP)
+* This file is part of the IEA-ETSAP TIMES model generator, licensed
+* under the GNU General Public License v3.0 (see file NOTICE-GPLv3.txt).
+*-----------------------------------------------------------------------------
+* coef_ext.zon - Coefficients extension for period-wise Region Zooming
+*-----------------------------------------------------------------------------
+* Define R0 variables when direct R0 bounds or STGIPS (only needed for direct variable bounds)
+  LOOP(BD,ZTPS_ACT(RTP(REG_TZON(ZR0(R),T),P),S)$((NOT PRC_VINT(R,P)+RTPS_OFF(R,T,P,S))$PRC_TS(R,P,S)) $= ACT_BND(R,T,P,S,BD));
+  ZTPS_ACT(RTP(RT_ZON(R,T),P),ANNUAL(S))$(PRC_TS(R,P,S)$Z0RZ(R)$PRC_MAP(R,'STK',P)) = YES;
+  ZTPS_ACT(R,LL-LEAD(LL),P,ANNUAL(S))$(PRC_TS(R,P,S)$Z0RZ(R)$PRC_MAP(R,'STK',P)$T(LL)) = YES;
+* Handle FLO_BND like in BND_FLO
+  FLO_BND(R,T,P,C,S,'LO')$((NOT RPC_EMIS(R,P,C))$(FLO_BND(R,T,P,C,S,'LO')=0)$RP_FLO(R,P))=0;
+  LOOP((RTPC(R,T,P,C),S,BD)$FLO_BND(RTPC,S,BD),TRACKPC(RP_FLO(R,P),C)=YES);
+  TRACKPC(PRC_VINT(R,P),C) = NO;
+  TRACKPC(RPC_FFUNC(R,P,C))= NO;
+  TRACKPC(RPC_EMIS(R,P,C)) = NO;
+  TRACKP(R,P)$= SUM(RPC_ACT(TRACKPC(R,P,C)),1); TRACKPC(RPC_ACT(R,P,C)) = NO;
+  LOOP(BD,
+    ZTPCS_FLO(RTPCS_VARF(REG_TZON(ZR0(R),T),P,C,S),IO)$(TRACKPC(R,P,C)$TOP(R,P,C,IO)) $= FLO_BND(R,T,P,C,S,BD);
+    ZTPS_ACT(RTP(REG_TZON(ZR0(R),T),P),S)$(TRACKP(R,P)$PRC_TS(R,P,S)) = YES;
+  );
+  OPTION CLEAR=TRACKP,CLEAR=TRACKPC;
+* Storage flow bounds
+  TRACKP(RP(R,P))$((NOT PRC_VINT(R,P))$PRC_MAP(R,'STG',P)) = YES;
+  LOOP(BD,
+    ZTPCS_FLO(RTPC(REG_TZON(ZR0(R),T),P,C),S,IO('IN'))$(TRACKP(R,P)$TOP(R,P,C,IO)) $= STGIN_BND(R,T,P,C,S,BD);
+    ZTPCS_FLO(RTPC(REG_TZON(ZR0(R),T),P,C),S,IO('OUT'))$(TRACKP(R,P)$TOP(R,P,C,IO)) $= STGOUT_BND(R,T,P,C,S,BD));
+  LOOP(BD,
+    ZTCS_AGG(RTCS_VARC(REG_TZON(ZR0(R),T),C,S),'LO') $= COM_BNDNET(R,T,C,S,BD);
+    ZTCS_AGG(RTCS_VARC(REG_TZON(ZR0(R),T),C,S),'UP') $= COM_BNDPRD(R,T,C,S,BD));
+* Demand aggregation if no damage elasticities
+$IF DEFINED DAM_COST LOOP((R,T,C,CUR)$DAM_COST(R,T,C,CUR),TRACKC(DEM(REG,C))$ZRSR(REG,R)=YES);
+  ZTCS_AGG(RTC(REG_TZON(ZR0(R),T),C),ANNUAL,'N')$TRACKC(R,C) $= COM_PROJ(R,T,C);
+  OPTION CLEAR=TRACKP,CLEAR=TRACKC;
+*-------------------------------------------------------------------------------
+* Take care of negative bounds for COM and OBJVAR
+  LOOP(Z0RZ(REG),
+   COM_BNDNET(RTCS_VARC(R,T,C,S),BD('LO'))$((COM_BNDNET(R,T,C,S,BD)>=0)$(COM_BNDNET(REG,T,C,S,BD)<0)$ZRSR(REG,R)) $= COM_BNDNET(REG,T,C,S,BD);
+   COM_BNDPRD(RTCS_VARC(R,T,C,S),BD('LO'))$((COM_BNDPRD(R,T,C,S,BD)>=0)$(COM_BNDPRD(REG,T,C,S,BD)<0)$ZRSR(REG,R)) $= COM_BNDPRD(REG,T,C,S,BD);
+   UC_RHSR(R,'OBJVAR','N') $= UC_RHSR(REG,'OBJVAR','N');
+  );
+* Disable dynamic UC referring to inactive subregion
+  UC_T_SUCC(R(ZRZ),UCN,T)$(NOT RT_ZON(R,T)) = NO; OPTION CLEAR=RXX;
+  LOOP((UC_T_SUCC(R(ZRZ),UCN,TT(T+1)),UC_DYNDIR(R,UCN,'RHS'))$(NOT RT_ZON(R,T)),RXX(R,UCN,TT)=YES);
+  LOOP((UC_T_SUCC(R(ZRZ),UCN,TT(T-1)),UC_DYNDIR(R,UCN,'LHS'))$(NOT RT_ZON(R,T)),RXX(R,UCN,TT)=YES);
+  UC_T_SUCC(RXX(R,UCN,T))=NO;
+  OPTION CLEAR=RXX;
+*-------------------------------------------------------------------------------
+$IF NOT DEFINED PREMILE $EXIT
+* Set bounds IRE flows and set prices from previous run
+  RPC_IREIN(RPC_IREIO) = NO;
+  PAR_IRE(R,V,T,P,C,TS,IE)$(NOT RPC_IREIN(R,P,C,IE,'IN')) = 0;
+  IF(CARD(PAR_IRE), OPTION TRACKPC < PAR_IRE; TRACKPC(RPC_AIRE(R,P,C)) = NO;
+  TRACKPG(R,P,COM_TYPE) $= SUM(TRACKPC(R,P,C)$COM_TMAP(R,COM_TYPE,C),1);
+  LOOP(TRACKPG(ZR0(R),P,CG),
+    FLO_BND(RTP(R,T,P),CG,S,'FX')$((NOT RT_ZON(R,T))$PRC_TS(R,P,S)) =
+      SUM((RTP_VINTYR(R,V,T,P),RPC_IREIN(R,P,C,IE,'IN'))$COM_GMAP(R,CG,C),EPS+PAR_IRE(R,V,T,P,C,S,IE)*(1-2$XPT(IE)))));
+  OPTION CLEAR=TRACKPC,CLEAR=TRACKPG;

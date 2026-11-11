@@ -1,0 +1,44 @@
+*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+* Copyright (C) 2000-2023 Energy Technology Systems Analysis Programme (ETSAP)
+* This file is part of the IEA-ETSAP TIMES model generator, licensed
+* under the GNU General Public License v3.0 (see file NOTICE-GPLv3.txt).
+*-----------------------------------------------------------------------------
+* rptinit.zon - Extension for period-wise Region Zooming
+*-----------------------------------------------------------------------------
+
+*------------------------------------------------------------------------------
+* Get the variable levels
+   VAR_ACT.L(RTP_VINTYR(REG,V,T,P),S)$PRC_TS(REG,P,S)         $= SUM(ZRSR(REG,R),VAR_ACT.L(R,V,T,P,S));
+   VAR_BLND.L(REG,T,BLE,C)                                    $= SUM(ZRSR(REG,R),VAR_BLND.L(R,T,BLE,C));
+   VAR_CAP.L(RTP(REG,T,P))                                    $= SUM(ZRSR(REG,R),VAR_CAP.L(R,T,P));
+   VAR_COMNET.L(RTCS_VARC(REG,T,COM,S))                       $= SUM(ZRSR(REG,R),VAR_COMNET.L(R,T,COM,S));
+   VAR_COMPRD.L(RTCS_VARC(REG,T,COM,S))                       $= SUM(ZRSR(REG,R),VAR_COMPRD.L(R,T,COM,S));
+   VAR_IRE.L(RTP_VINTYR(REG,V,T,P),C,S,IE)$RPCS_VAR(REG,P,C,S)$= SUM(ZRSR(REG,R),VAR_IRE.L(R,V,T,P,C,S,IE));
+   VAR_ELAST.L(RTCS_VARC(REG,T,C,S),J,BD)$RCJ(REG,C,J,BD)     $= SUM(ZRSR(REG,R),VAR_ELAST.L(R,T,C,S,J,BD));
+   VAR_FLO.L(RTP_VINTYR(REG,V,T,P),C,S)$RPCS_VAR(REG,P,C,S)   $= SUM(ZRSR(REG,R),VAR_FLO.L(R,V,T,P,C,S));
+   VAR_NCAP.L(RTP(REG,T,P))                                   $= SUM(ZRSR(REG,R),VAR_NCAP.L(R,T,P));
+   VAR_SIN.L(RTP_VINTYR(REG,V,T,P),C,S)$RPCS_VAR(REG,P,C,S)   $= SUM(ZRSR(REG,R),VAR_SIN.L(R,V,T,P,C,S));
+   VAR_SOUT.L(RTP_VINTYR(REG,V,T,P),C,S)$RPCS_VAR(REG,P,C,S)  $= SUM(ZRSR(REG,R),VAR_SOUT.L(R,V,T,P,C,S));
+   VAR_UPS.L(RTP_VINTYR(REG,V,T,P),S,L)$RPS_UPS(REG,P,S)      $= SUM(ZRSR(REG,R),VAR_UPS.L(R,V,T,P,S,L));
+   VAR_UPT.L(RTP_VINTYR(REG,V,T,P),S,UPT)$RPS_UPS(REG,P,S)    $= SUM(ZRSR(REG,R),VAR_UPT.L(R,V,T,P,S,UPT));
+   VAR_UDP.L(RTP_VINTYR(REG,V,T,P),S,L)$PRC_TS(REG,P,S)       $= SUM(ZRSR(REG,R),VAR_UDP.L(R,V,T,P,S,L));
+   VAR_SCAP.L(RTP_CPTYR(REG,V,T,P))                           $= SUM(ZRSR(REG,R),VAR_SCAP.L(R,V,T,P)); 
+   VAR_SCAP.L(REG,V,'0',P)$RTP(REG,V,P)                       $= SUM(ZRSR(REG,R),VAR_SCAP.L(R,V,'0',P));
+$IF %ETL%==YES  VAR_IC.L(RTP(REG,T,P))                        $= SUM(ZRSR(REG,R),VAR_IC.L(R,T,P));
+
+* Get variable marginals
+*  VAR_ACT.M(RTP_VINTYR(REG,V,T,P),S) $= SUM(ZRSR(REG,R),VAR_ACT.M(R,V,T,P,S));
+*  VAR_CAP.M(RTP(REG,T,P))            $= SUM(ZRSR(REG,R),VAR_CAP.M(R,T,P));
+*  VAR_NCAP.M(RTP(REG,T,P))           $= SUM(ZRSR(REG,R),VAR_NCAP.M(R,T,P));
+*  VAR_COMNET.M(RTCS_VARC(REG,T,C,S)) $= SUM(ZRSR(REG,R),VAR_COMNET.M(R,T,C,S));
+*  VAR_COMPRD.M(RTCS_VARC(REG,T,C,S)) $= SUM(ZRSR(REG,R),VAR_COMPRD.M(R,T,C,S));
+*  VAR_FLO.M(REG,V,T,P,C,S)           $= SUM(ZRSR(REG,R),VAR_FLO.M(R,V,T,P,C,S));
+
+* Get equation marginals
+*  EQG_COMBAL.M(RTCS_VARC(REG,T,C,S)) $= SUM(ZRSR(REG,R),EQG_COMBAL.M(R,T,C,S));
+*  EQE_COMBAL.M(RTCS_VARC(REG,T,C,S)) $= SUM(ZRSR(REG,R),EQE_COMBAL.M(R,T,C,S));
+*  EQE_COMPRD.M(RTCS_VARC(REG,T,C,S)) $= SUM(ZRSR(REG,R),EQE_COMPRD.M(R,T,C,S));
+*  EQ_PEAK.M(REG,T,CG,S)              $= SUM(ZRSR(REG,R),EQ_PEAK.M(R,T,CG,S));
+*  EQ_IRE.M(RTPC(REG,T,P,C),IE,S)     $= SUM(ZRSR(REG,R),EQ_IRE.M(R,T,P,C,IE,S));
+*  EQE_CPT.M(RTP(REG,T,P))            $= SUM(ZRSR(REG,R),EQE_CPT.M(R,T,P));
+   EQG_COMBAL.L(RTCS_VARC(REG,T,C,S)) $= SUM(ZRSR(REG,R),EQG_COMBAL.L(R,T,C,S));

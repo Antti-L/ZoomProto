@@ -1,0 +1,49 @@
+*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+* Copyright (C) 2000-2023 Energy Technology Systems Analysis Programme (ETSAP)
+* This file is part of the IEA-ETSAP TIMES model generator, licensed
+* under the GNU General Public License v3.0 (see file NOTICE-GPLv3.txt).
+*-----------------------------------------------------------------------------
+* INIT_ext.zon - Extension for period-wise Region Zooming
+*-----------------------------------------------------------------------------
+* Currently Stochastics, Micro and Macro not supported
+$IF %STAGES%==YES $ABORT STAGES currently not supported with Zoom!
+$IFI %MICRO%==YES $ABORT MICRO currently not supported with Zoom!
+$IFI %MACRO%==YES $ABORT MACRO currently not supported with Zoom!
+*-----------------------------------------------------------------------------
+  SET VNTRT(YEAR,YEAR) //;
+* Save R0 Zoom levels and set IE option
+  ZR_ZLV(Z0RZ(R)) = REG_ZOOM(R,'0');
+  REG_ZOOM(R,LL--ORD(LL))$REG_ZOOM(R,LL) = 10;
+
+* Interpolate ZOOM-specific parameters
+$ BATINCLUDE preshape REG_ZOOM R '' ",'0'" V RXX 1
+$ BATINCLUDE fillparm ZCAP_SHAR R 'P,L' ",'0','0','0','0'" V 'RVP(R,V,P)' '>=0'
+$ BATINCLUDE fillparm ZOOM_SHAR R 'CG,L' ",'0','0','0','0'" V 1 '>=0'
+
+* Collect period-wise region mappings
+  REG_TZON(R(Z0RZ),T) $= REG_ZOOM(R,T);
+  LOOP(Z0RZ(R),RTREG(REG_TZON(R,T),REG,'FX')$ZRSR(R,REG)=YES;
+       RTREG(REG,T,REG,'FX')$(REG_TZON(R,T)$ZRSR(R,REG))=YES);
+
+* Region ON controls:
+  RTREG(R(ZR0),T,R,'FX')$(NOT REG_TZON(R,T))=YES;
+  RT_ZON(ZR0(R),T) = RTREG(R,T,R,'FX');
+  RT_ZON(ZRZ(R),T) = SUM(RTREG(ZR0,T,R,'FX'),1);
+  RTREG(R,V,R,'FX') $= PASTMILE(V);
+* For inactive sub-regions, add both itself and parent as ref options
+  RTREG(ZRZ(R),T,REG,'N')$(RT_ZON(REG,T)$ZRSR(REG,R))=YES;
+  RTREG(ZRZ(R),T,R,'LO')$(NOT RT_ZON(R,T))=YES;
+
+  ZCAP_SHAR(R,V,P,L)$(NOT PRC_CAP(R,P)) = 0;
+* Complete process shares
+  LOOP(PRC_GRP(CG),ZCAP_SHAR(R,V,P,L)$((NOT ZCAP_SHAR(R,V,P,L)+ZCAP_SHAR(R,V,P,'FX'))$PRC_CAP(R,P)$PRC_MAP(R,PRC_GRP,P)) $= ZOOM_SHAR(R,V,CG,L));
+  LOOP(COM_TYPE,ZCAP_SHAR(R,V,P,L)$((NOT ZCAP_SHAR(R,V,P,L)+ZCAP_SHAR(R,V,P,'FX'))$PRC_CAP(R,P)$RP_PGTYPE(R,P,COM_TYPE)) $= ZOOM_SHAR(R,V,COM_TYPE,L));
+  LOOP(Z0RZ(REG),ZCAP_SHAR(R,V,P,BD('FX'))$((NOT ZCAP_SHAR(R,V,P,BD))$NCAP_PASTI(REG,V,P)$ZRSR(REG,R)) $= ZCAP_SHAR(R,V,P,'N'));
+  LOOP(Z0RZ(REG),ZCAP_SHAR(R,V,P,BD('FX'))$((NOT ZCAP_SHAR(R,V,P,BD))$NCAP_PASTI(REG,V,P)$ZRSR(REG,R)) $= ZOOM_SHAR(R,V,'DEM','N'));
+  LOOP(ZRSR(REG,R),ZCAP_SHAR(R,V,P,BD)$(NOT PRC_CAP(REG,P)) = 0); ZCAP_SHAR(R,V,P,'N') = 0;
+* No share equations when subregions active
+  LOOP(ZR0(REG),ZCAP_SHAR(R,T,P,L)$((NOT NCAP_PASTI(REG,T,P)$ZCAP_SHAR(R,T,P,'LO'))$ZRSR(REG,R)$RT_ZON(R,T)) = 0);
+  OPTION PRC_CAP < NCAP_PASTI;
+  LOOP((RTP(ZRZ(R),PASTMILE(V),P),BDNEQ)$(ZCAP_SHAR(R,V,P,BDNEQ)$PRC_CAP(R,P)), PRC_RCAP(R,P)=YES);
+  OPTION CLEAR=PRC_RCAP;
+*-------------------------------------------------------------------------------

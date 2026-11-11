@@ -1,0 +1,86 @@
+*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+* Copyright (C) 2000-2023 Energy Technology Systems Analysis Programme (ETSAP)
+* This file is part of the IEA-ETSAP TIMES model generator, licensed
+* under the GNU General Public License v3.0 (see file NOTICE-GPLv3.txt).
+*-----------------------------------------------------------------------------
+* PPM_ext.zon - Extension for period-wise Region Zooming
+*-----------------------------------------------------------------------------
+$ SET TMP '%VARCOST%' SETGLOBAL ZONOBJ '%OBJ%' SETGLOBAL VARCOST LIN
+$ IFI NOT %VARCOST%==LIN $ABORT Varcost overridden by user
+$ IFI NOT %OBJ%==LIN $SETGLOBAL ZONOBJ 'ALT' $SETGLOBAL VARCOST %TMP%
+*-----------------------------------------------------------------------------
+* No share equations when subregions active
+  ZCAP_SHAR(R,T,P,L)$RT_ZON(R,T) = 0;
+  ZCAP_SHAR(R,V,P,L)$(NOT PRC_CAP(R,P)) = 0;
+* All ZOFF clearing  for OBJ
+$IF DEFINED MI_CCONS MI_CCONS(R,T,C)$(NOT RT_ZON(R,T)) = 0;
+  COM_BPRICE(R,T,C,S,CUR)$(NOT RT_ZON(R,T)) = 0;
+  LOOP(RPC_IREIO(ZR0,P,C,IE,'IN'),IRE_PRICE(RTPCS_VARF(R,T,P,C,S),REG,IE,CUR)$ZRSR(ZR0,R)=0);
+$IF DEFINED DAM_COST DAM_COST(R,T,C,CUR)$(NOT RT_ZON(R,T)) = 0;
+* UC subregions clearing (review by allowing as much as can!)
+  UC_T_EACH(ZRZ(R),UCN,T)$(NOT RT_ZON(R,T)) = NO;
+*.UC_T_SUCC(ZRZ(R),UCN,T)$(NOT RT_ZON(R,T)) = NO;
+  UC_T_SUCC(UC_T_SUCC(ZRZ(R),UCN,T+1))$((NOT RT_ZON(R,T))$UC_DYNDIR(R,UCN,'RHS')) = NO;
+  UC_T_SUCC(UC_T_SUCC(ZRZ(R),UCN,T-1)) = (RT_ZON(R,T)+UC_DYNDIR(R,UCN,'RHS'));
+  LOOP(UC_T_SUM(ZRZ(R),UCN,T)$(NOT RT_ZON(R,T)),UC_R_EACH(R,UCN) = NO);
+  LOOP(ZRSR(REG,R),UC_T_SUM(UC_R_SUM(R,UCN),T)$UC_R_SUM(REG,UCN) = NO);
+*-------------------------------------------------------------------------------
+* disable CUMFLO and UCRTP(act) equations
+  PRC_DYNUC(UC_N,SIDE,ZRZ(R),T,P,'ACT',BD)$(NOT RT_ZON(R,T))=0;
+  PRC_DYNUC(UC_N,SIDE,ZRZ(R),T+1,P,'ACT',BD)$(NOT RT_ZON(R,T))=0;
+  LOOP((Z0RZ(REG),T)$RT_ZON(REG,T),
+    RPC_CUMFLO(RPC_CUMFLO(R,P,C,YEAR,LL))$((B(T)<=YEARVAL(LL))$(E(T)>=YEARVAL(YEAR))$ZRSR(REG,R)) = NO);
+
+* Remove subregions from UC_R_SUM if Parent region
+  OPTION CLEAR=RXX;
+  LOOP(UC_R_SUM(Z0RZ(REG),UCN),
+   IF(SUM(ZRSR(REG,R),1)=SUM(ZRSR(REG,R),1$UC_R_SUM(R,UCN)), RXX(R,UCN,R)=YES));
+  UC_R_SUM(R,UCN)$RXX(R,UCN,R)=NO;
+* Collect all UC_ACT, UC_FLO, UC_IRE constraints for inactive subregions and disable UCs
+  OPTION CLEAR=RXX;
+  LOOP(UC_T_SUM(ZRZ(R),UCN,T)$(NOT RT_ZON(R,T)),UC_RN(UC_N,ALL_R)=YES);
+  LOOP(UC_MAP_FLO(UCN,SIDE,R,P,C), RXX(R,UC_RN(UCN,R))=YES);
+  LOOP(UC_MAP_IRE(UCN,R,P,C,IE),   RXX(R,UC_RN(UCN,R))=YES);
+  LOOP(UC_GMAP_P(R,UCN,'ACT',P),   RXX(R,UC_RN(UCN,R))=YES);
+  UC_R_EACH(R,UCN)$RXX(R,UCN,R)=NO;
+  OPTION CLEAR=UC_RN,CLEAR=RXX;
+*-------------------------------------------------------------------------------
+* Disable subregion trade activity when region not zoomed
+  ACT_BND(ZRZ(R),T,P,S,'FX')$((NOT RT_ZON(R,T))$PRC_TS(R,P,S)$RP_IRE(R,P))=EPS;
+  ACT_BND(ZRZ(R),T,P,S,'FX')$((NOT RT_ZON(R,T))$PRC_TS(R,P,S)$RP_IRE(R,P))=EPS;
+
+*-------------------------------------------------------------------------------
+* Complete process shares
+  LOOP(PRC_GRP(CG),ZCAP_SHAR(R,V,P,L)$((NOT ZCAP_SHAR(R,V,P,L))$PRC_CAP(R,P)$PRC_MAP(R,PRC_GRP,P)) $= ZOOM_SHAR(R,V,CG,L));
+  LOOP(COM_TYPE,ZCAP_SHAR(R,V,P,L)$((NOT ZCAP_SHAR(R,V,P,L))$PRC_CAP(R,P)$RP_PGTYPE(R,P,COM_TYPE)) $= ZOOM_SHAR(R,V,COM_TYPE,L));
+  LOOP(Z0RZ(REG),ZCAP_SHAR(R,V,P,BD('FX'))$((NOT ZCAP_SHAR(R,V,P,BD))$NCAP_PASTI(REG,V,P)$ZRSR(REG,R)) $= ZCAP_SHAR(R,V,P,'N'));
+  LOOP(Z0RZ(REG),ZCAP_SHAR(R,V,P,BD('FX'))$((NOT ZCAP_SHAR(R,V,P,BD))$NCAP_PASTI(REG,V,P)$ZRSR(REG,R)) $= ZOOM_SHAR(R,V,'DEM','N'));
+  LOOP(ZRSR(REG,R),ZCAP_SHAR(R,V,P,BD)$(NOT PRC_CAP(REG,P)) = 0); ZCAP_SHAR(R,V,P,'N') = 0;
+*-------------------------------------------------------------------------------
+* Scale NCAP_PASTI
+  NCAP_PASTI(ZRZ(R),LL,P)$(NOT ZTP_PASTI(R,LL,P)) = 0;
+  RVP(ZR0(R),V,P) $= NCAP_PASTI(R,V,P);
+* Default share would be 1/N with N sub-regions
+  PASTSUM(RVP(R,V,P)) = SUM(ZRSR(R,REG)$(NOT ZTP_PASTI(REG,V,P)),1$(NOT ZCAP_SHAR(REG,V,P,'FX')));
+  COEF_RTP(RVP(R,V,P)) = MAX(0,1-SUM(ZRSR(R,REG)$(NOT ZTP_PASTI(REG,V,P)),ZCAP_SHAR(REG,V,P,'FX')));
+  LOOP(ZRSR(REG,R),ZCAP_SHAR(R,V,P,'N')$RVP(REG,V,P) = 
+    (ZCAP_SHAR(R,V,P,'FX')+(1/PASTSUM(REG,V,P)*COEF_RTP(REG,V,P))$(NOT ZCAP_SHAR(R,V,P,'FX')))$((NOT ZTP_PASTI(R,V,P))$PASTSUM(REG,V,P)) +
+    ((NCAP_PASTI(R,V,P)/NCAP_PASTI(REG,V,P))$(NOT COEF_RTP(REG,V,P))+ZCAP_SHAR(R,V,P,'FX')$(NOT ZTP_PASTI(R,V,P)))$(NOT PASTSUM(REG,V,P)));
+  PASTSUM(RVP(R,V,P)) = SUM(ZRSR(R,REG),ZCAP_SHAR(REG,V,P,'N')+1-1);
+  PASTSUM(RVP(R,V,P))$PASTSUM(RVP) = MAX(0,NCAP_PASTI(RVP)-SUM(ZRSR(R,REG),NCAP_PASTI(REG,V,P)))/PASTSUM(RVP);
+* Apply shares to missing NCAP_PASTI
+  LOOP(ZRSR(REG,R),
+    NCAP_PASTI(R,V,P)$(ZCAP_SHAR(R,V,P,'N')$PASTSUM(REG,V,P)) = PASTSUM(REG,V,P)*ZCAP_SHAR(R,V,P,'N'));
+* Apply shares to missing PRC_RESID
+  LOOP(PYR_S(V),
+    PASTSUM(RVP(R,V,P)) = SUM(ZRSR(R,REG),ZCAP_SHAR(REG,V,P,'N')+1-1);
+    PASTSUM(R,T,P)$PASTSUM(R,V,P) = MAX(0,PRC_RESID(R,T,P)-SUM(ZRSR(R,REG)$ZTP_PASTI(REG,V,P),PRC_RESID(REG,T,P)))/PASTSUM(R,V,P);
+    LOOP(ZRSR(REG,R),
+      PRC_RESID(R,T,P)$(ZCAP_SHAR(R,V,P,'N')$PASTSUM(REG,V,P)) = PASTSUM(REG,T,P)*ZCAP_SHAR(R,V,P,'N')));
+  LOOP(ZRSR(REG,R),ZCAP_SHAR(R,PASTMILE(V),P,'FX')$NCAP_PASTI(R,V,P) $= NCAP_PASTI(R,V,P)/NCAP_PASTI(R,V,P));
+  OPTION CLEAR=PASTSUM,CLEAR=RVP,CLEAR=COEF_RTP;
+*-------------------------------------------------------------------------------
+* Prepare for QA check
+  ZCAP_SHAR(R,PASTMILE(V),P,'FX')$SUM(BDNEQ$ZCAP_SHAR(R,V,P,BDNEQ),1) = 0;
+  ZCAP_SHAR(R,PASTMILE(V),P,BDNEQ(BD))$((ZCAP_SHAR(R,V,P,'UP')<ZCAP_SHAR(R,V,P,'LO'))$ZCAP_SHAR(R,V,P,'UP')) = (ZCAP_SHAR(R,V,P,'UP')+ZCAP_SHAR(R,V,P,'LO'))/2;
+$ BATINCLUDE pp_qacas.zon

@@ -1,0 +1,97 @@
+*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+* Copyright (C) 2000-2023 Energy Technology Systems Analysis Programme (ETSAP)
+* This file is part of the IEA-ETSAP TIMES model generator, licensed
+* under the GNU General Public License v3.0 (see file NOTICE-GPLv3.txt).
+*-----------------------------------------------------------------------------
+* PP_QACAS.zon - Extension for period-wise Region Zooming
+*-----------------------------------------------------------------------------
+  SET RTP_RG(R,R,ALLYEAR,P) //;
+  SET RTPRIG(R,ALLYEAR,P,R) //;
+  SET RP_GIR(R,R,P)  //;
+*------------------------------------------------------------------------------
+* QA checks for capacity shares
+* Collect the Groups involved
+  RP_GIR(ZRSR(REG,R),P)$=PRC_CAP(REG,P); PUTGRP=0;
+  RTP_RG(ZRSR(REG,R),V,P) $= SUM(BD$ZCAP_SHAR(R,V,P,BD),1);
+  RVP(RTP(REG,V,P)) $= SUM(RTP_RG(REG,R,V,P)$RP_GIR(REG,R,P),1);
+  OPTION CLEAR=RTP_RG;
+* Check simultaneous FX+LO/UP
+  RTP_RG(ZRSR(REG,R),T,P) $= ZCAP_SHAR(R,T,P,'FX');
+  PUTGRP = 0;
+  LOOP(RTP_RG(REG,R,T,P)$(ZCAP_SHAR(R,T,P,'LO')+ZCAP_SHAR(R,T,P,'UP')),
+$     BATINCLUDE pp_qaput.mod PUTOUT PUTGRP 01 'ZCAP_SHAR conflict: Both FX + LO/UP specified, latter ignored'
+      PUT QLOG ' WARNING       -     R=',%RL%,' Y=',T.TL,' P=',%PL%,' REG=',REG.TL ;
+    RTPRIG(REG,T,P,R) = YES;
+  );
+  LOOP(ZR0(REG),ZCAP_SHAR(R,T,P,BDNEQ)$RTPRIG(REG,T,P,R) = 0);
+  OPTION CLEAR=RTPRIG;
+*-----------------------------------------------------------------------------
+* Eliminate very small ZCAP_SHAR
+$IF NOT SET SHARETOL $SETLOCAL SHARETOL 9E-5
+  ZCAP_SHAR(RTP(R,T,P),BD('UP'))$((ZCAP_SHAR(RTP,BD) GE 1)$ZCAP_SHAR(RTP,BD)) = 0;
+  ZCAP_SHAR(R,T,P,BDUPX(BD))$((ZCAP_SHAR(R,T,P,BD) < %SHARETOL%)$ZCAP_SHAR(R,T,P,BD)) = EPS;
+  ZCAP_SHAR(R,T,P,BDLOX(BD))$((ABS(ZCAP_SHAR(R,T,P,BD)-1) < %SHARETOL%)$ZCAP_SHAR(R,T,P,BD)) = 1;
+*-----------------------------------------------------------------------------
+* Check for redundant fixed shares
+* RTP_RG(ZRSR(REG,R),T,P) $= ZCAP_SHAR(R,T,P,'FX');
+* Get the good Groups by including those that have not been fixed
+  RTPRIG(RVP(REG,T,P),R)$((NOT RTP_RG(REG,R,T,P))$RP_GIR(REG,R,P)) = YES;
+  LOOP(RTPRIG(REG,T,P,R), RTPX(REG,T,P) = YES);
+  OPTION CLEAR=RTPRIG; PUTGRP=0;
+  LOOP(RVP(REG,T,P)$(NOT RTPX(REG,T,P)),
+    Z = SUM(RP_GIR(REG,R,P),ZCAP_SHAR(R,T,P,'FX')+8);
+    F = MOD(Z,8);
+    IF(ABS(F-1) GT .001,
+$     BATINCLUDE pp_qaput.mod PUTOUT PUTGRP 07 'Inconsistent sum of fixed ZCAP_SHAREs in Group'
+      PUT QLOG ' SEVERE ERROR  -     R=',REG.TL,' P=',%PL%,' T=',T.TL,' SUM=',F:0:5);
+    F = MAX(F-1,F/Z*8-%SHARETOL%);
+$IF NOT %SHARELAX%==NO
+    LOOP(RP_GIR(REG,R,P)$Z, IF(ZCAP_SHAR(R,T,P,'FX') GT F, Z=0; RTPRIG(REG,T,P,R) = YES));
+  );
+  IF(CARD(RTPRIG),
+   LOOP(ZR0(REG),ZCAP_SHAR(R,T,P,BD)$RTPRIG(REG,T,P,R) = 0);
+   F=CARD(RTPRIG); DISPLAY 'Redundant Veda ZCAP_SHAR bounds removed:',F);
+  OPTION CLEAR=RTPX;
+*------------------------------------------------------------------------------
+* Check for defective FX/UP shares
+  RTP_RG(ZRSR(REG,R),T,P) $= ZCAP_SHAR(R,T,P,'UP');
+* Get the good Groups by including those that have not been fixed
+  RTPRIG(RVP(REG,T,P),R)$((NOT RTP_RG(REG,R,T,P))$RP_GIR(REG,R,P)) = YES;
+  LOOP(RTPRIG(REG,T,P,R), RTPX(R,T,P) = YES);
+  OPTION CLEAR=RTPRIG; PUTGRP=0;
+  LOOP(RVP(REG,T,P)$(NOT RTPX(REG,T,P)),
+    F = SUM((RP_GIR(REG,R,P),BDUPX),ZCAP_SHAR(R,T,P,BDUPX));
+    IF(F LT 1+%SHARETOL%, Z = 1;
+$IF NOT %SHARELAX%==NO LOOP(RP_GIR(REG,R,P)$Z, MY_F=ZCAP_SHAR(R,T,P,'UP'); IF((MY_F GT F-1)$MY_F, Z=0; RTPRIG(REG,T,P,R)=YES));
+     IF(F LT 1-%SHARETOL%$(NOT Z),
+$     BATINCLUDE pp_qaput.mod PUTOUT PUTGRP 07 'Defective sum of FX and UP ZCAP_SHAREs in Group'
+      PUT QLOG ' SEVERE ERROR  -     R=',REG.TL,' P=',%PL%,' T=',T.TL,' SUM=',F:0:5;
+      IF(NOT Z,PUT QLOG ' (Auto-relaxed)'))));
+  OPTION CLEAR=RTP_RG;
+  RTP_RG(REG,R,T,P)$(RP_GIR(REG,R,P)$RTPRIG(REG,T,P,R)) = YES;
+  LOOP(ZR0(REG),
+    ZCAP_SHAR(R,T,P,'FX')$(NOT RTPRIG(REG,T,P,R)) $= ZCAP_SHAR(R,T,P,'UP')$RTP_RG(REG,R,T,P);
+    ZCAP_SHAR(R,T,P,BDNEQ)$RTP_RG(REG,R,T,P) = 0);
+  OPTION CLEAR=RTPX, CLEAR=RTP_RG;
+*------------------------------------------------------------------------------
+* Check for excessive FX/LO shares
+  RTP_RG(ZRSR(REG,R),T,P) $= SUM(BDLOX$ZCAP_SHAR(R,T,P,BDLOX),1);
+  LOOP((RP_GIR(REG,R,P),RTP_RG(REG,R,T,P)),RTPX(REG,T,P) = YES);
+  OPTION CLEAR=RTPRIG; PUTGRP=0;
+  LOOP(RTPX(RVP(REG,T,P)),
+    F = SUM((RP_GIR(REG,R,P),BDLOX),ZCAP_SHAR(R,T,P,BDLOX));
+    IF(F GT 1-%SHARETOL%, Z = 1; MY_F = 0;
+     IF(F GT 1+%SHARETOL%, MY_F = 1; CNT=SUM(RP_GIR(REG,R,P),1)+1;
+$     BATINCLUDE pp_qaput.mod PUTOUT PUTGRP 07 'Excessive sum of FX and LO ZCAP_SHAREs in Group'
+      PUT QLOG ' SEVERE ERROR  -     R=',REG.TL,' P=',%PL%,' T=',T.TL,' SUM=',F:0:5);
+      F = MAX(1/CNT,F-1); LOOP((RP_GIR(REG,R,P),BDLOX)$Z, IF(ZCAP_SHAR(R,T,P,BDLOX) GT F, Z=0;
+$IF NOT %SHARELAX%==NO  RTPRIG(REG,T,P,R) = YES; IF(MY_F,PUT QLOG ' (Auto-relaxed)';);
+   ))));
+  OPTION CLEAR=RTP_RG;
+  RTP_RG(REG,R,T,P)$(RP_GIR(REG,R,P)$RTPRIG(REG,T,P,R)) = YES;
+  LOOP(ZR0(REG),
+    ZCAP_SHAR(R,T,P,'FX')$RTP_RG(REG,R,T,P) = ZCAP_SHAR(R,T,P,'LO')+ZCAP_SHAR(R,T,P,'FX')+EPS;
+    ZCAP_SHAR(R,T,P,BD)$((BDNEQ(BD)+RTPRIG(REG,T,P,R))$RTP_RG(REG,R,T,P)) = 0);
+  OPTION CLEAR=RP_GIR, CLEAR=RTP_RG, CLEAR=RTPRIG, CLEAR=RVP, CLEAR=RTPX;
+  PUTGRP=0;
+*-----------------------------------------------------------------------------

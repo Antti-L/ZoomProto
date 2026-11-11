@@ -1,0 +1,15 @@
+*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+* Copyright (C) 2000-2023 Energy Technology Systems Analysis Programme (ETSAP)
+* This file is part of the IEA-ETSAP TIMES model generator, licensed
+* under the GNU General Public License v3.0 (see file NOTICE-GPLv3.txt).
+*-----------------------------------------------------------------------------
+* INITMTY.zon - Extension for period-wise Region Zooming
+*-----------------------------------------------------------------------------
+$SETGLOBAL REGZON YES
+
+* Input attributes
+  SET REG_SRMAP(ALL_R,ALL_R) 'Map from parent regions to subregions'   //; 
+  PARAMETER REG_ZOOM(ALL_R,YEAR) 'Zoom levels of regions to be Zoomed' //;
+  PARAMETER ZCAP_SHAR(ALL_R,YEAR,P,L) 'Capacity shares for zoom-in'    //;
+  PARAMETER ZOOM_SHAR(ALL_R,YEAR,CG,L) 'Share projections for zoom-in' //;
+

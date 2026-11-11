@@ -1,0 +1,85 @@
+*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+* Copyright (C) 2000-2023 Energy Technology Systems Analysis Programme (ETSAP)
+* This file is part of the IEA-ETSAP TIMES model generator, licensed
+* under the GNU General Public License v3.0 (see file NOTICE-GPLv3.txt).
+*-----------------------------------------------------------------------------
+* INIT_ext.zon - Extension for period-wise Region Zooming
+*-----------------------------------------------------------------------------
+
+  OBJ_SUMII(R,T,P,LIFE,K_EOH,JOT)$(NOT RT_ZON(R,T)) = NO;
+  OBJ_SUMIII(R,T,P,LL,K,Y)$(NOT RT_ZON(R,T)) = NO;
+  OBJ_SUMIV(K_EOH,R,T,P,JOT,LIFE)$(NOT RT_ZON(R,T)) = NO;
+  OBJ_SUMIVS(R,T,P,K,Y)$(NOT RT_ZON(R,T)) = NO;
+  OBJ_SUMS(R,T,P)$(NOT RT_ZON(R,T)) = NO;
+  OBJ_SUMS3(R,T,P)$(NOT RT_ZON(R,T)) = NO;
+* Check again if needed, and if so, activate VARCOST=LIN
+  IF(ABS(ALTOBJ) NE 2,OBJ_ALTV(R,T)=1);
+  OBJ_ALTV(R,T)$(NOT RT_ZON(R,T)) = 0;
+  OBJ_LINT(R,T,YEAR,CUR)$(NOT RT_ZON(R,T)) = 0;
+
+*-----------------------------------------------------------------------------
+* Activity aggregations
+  %EQ%E_ZONACT(ZTPS_ACT(R,YEAR,P,RTS(S))%SWT%)$RPS_PRCTS(R,P,S)..
+* sum over all possible at process TS-level
+    SUM(PRC_TS(R,P,TS)$TS_MAP(R,S,TS),
+      SUM(RTP_VINTYR(R,V,T(YEAR),P)$(RTP_VARA(R,T,P)$ZRT_PP(R,T)),%VAR%_ACT(R,V,T,P,TS%SOW%)$TS_MAP(R,TS,S)) +
+      STG_CHRG(R,YEAR,P,TS)$PYR_S(YEAR))
+    =E= 
+    SUM((ZRSR(R,REG),PRC_TS(REG,P,TS))$TS_MAP(REG,S,TS),
+      SUM(RTP_VINTYR(REG,V,T(YEAR),P)$(RTP_VARA(R,T,P)$ZRT_PP(R,T)),%VAR%_ACT(REG,V,T,P,TS%SOW%)$TS_MAP(R,TS,S)) +
+      SUM(RTP_VINTYR(REG,V,T(MIYR_1),P)$PYR_S(YEAR),%VAR%_ACT(REG,V,T,P,TS%SOW%)));
+
+*-------------------------------------------------------------------------------
+* Flow aggregations, including storage
+  %EQ%E_ZONFLO(ZTPCS_FLO(ZRT_PP(REG,T),P,C,RTS(S),IO)%SWT%)..
+
+    SUM(RTPCS_VARF(R(REG),T,P,C,TS)$(TS_MAP(R,S,TS)$RTP_VARA(R,T,P)),
+      SUM(RTP_VINTYR(R,V,T,P),
+        (
+$         BATINCLUDE %cal_red% C COM TS P T
+        )$RP_STD(REG,P) +
+        SUM(RPC_IRE(R,P,C,IE),(%VAR%_IRE(R,V,T,P,C,TS,IE%SOW%)$(NOT RPC_AIRE(R,P,C))+(%VAR%_ACT(R,V,T,P,TS%SOW%)*PRC_ACTFLO(R,V,P,C))$RPC_AIRE(R,P,C)))$RP_IRE(REG,P)))
+      +
+    SUM((RTP_VINTYR(R(REG),V,T,P),RPCS_VAR(R,P,C,TS))$TS_MAP(R,S,TS),
+      SUM(RPC_STG(R,P,C),%VAR%_SIN(R,V,T,P,C,TS%SOW%)$IPS(IO)+%VAR%_SOUT(R,V,T,P,C,TS%SOW%)$(NOT IPS(IO))))$RP_STG(REG,P)
+
+   =E=
+    SUM(ZRSR(REG,R),
+      SUM(RTPCS_VARF(RTP_VARA(R,T,P),C,TS)$TS_MAP(R,S,TS),
+        SUM(RTP_VINTYR(R,V,T,P),
+         (
+$         BATINCLUDE %cal_red% C COM TS P T
+         )$RP_STD(R,P) +
+         SUM(RPC_IRE(R,P,C,IE),(%VAR%_IRE(R,V,T,P,C,TS,IE%SOW%)$(NOT RPC_AIRE(R,P,C))+(%VAR%_ACT(R,V,T,P,TS%SOW%)*PRC_ACTFLO(R,V,P,C))$RPC_AIRE(R,P,C)))$RP_IRE(R,P)))
+       +
+      SUM((RTP_VINTYR(R,V,T,P),RPCS_VAR(R,P,C,TS))$TS_MAP(R,S,TS),
+        SUM(RPC_STG(R,P,C),%VAR%_SIN(R,V,T,P,C,TS%SOW%)$IPS(IO)+%VAR%_SOUT(R,V,T,P,C,TS%SOW%)$(NOT IPS(IO))))$RP_STG(R,P));
+
+*-------------------------------------------------------------------------------
+* Commodity aggregations
+  %EQ%E_ZONCOM(ZTCS_AGG(ZRT_PP(R,T),C,RTS(S),L)%SWT%)..
+    SUM(ZRSR(R,REG),
+       %VAR%_DEM(REG,T,C)$LNX(L) +
+       SUM(RTCS_VARC(REG,T,C,TS)$TS_MAP(R,S,TS),
+         %VAR%_COMNET(REG,T,C,TS%SOW%)$SUM(BDLOX(BD(L)),1) +
+         %VAR%_COMPRD(REG,T,C,TS%SOW%)$SUM(BDUPX(BD(L)),1))$BD(L))
+   =E=
+    COM_PROJ(R,T,C)$LNX(L) +
+    SUM(RTCS_VARC(R,T,C,TS)$TS_MAP(R,S,TS),
+      %VAR%_COMNET(R,T,C,TS%SOW%)$SUM(BDLOX(BD(L)),1) +
+      %VAR%_COMPRD(R,T,C,TS%SOW%)$SUM(BDUPX(BD(L)),1))$BD(L);
+
+*-------------------------------------------------------------------------------
+* New capacity aggeragtions and sub-regional shares
+  %EQ%E_ZONCAP(RTP(ZR0(R),T,P)%SWT%)$((RT_ZON(R,T)+ZTP_NCAP(R,T,P))$PRC_CAP(R,P))..
+* Adding also additional sub-region processes mapped to host process by PRC_REFIT(sr,p,prc)
+    %VAR%_NCAP(R,T,P%SOW%) =E= SUM(ZRSR(R,REG),%VAR%_NCAP(REG,T,P%SOW%) + SUM(PRC$PRC_REFIT(REG,P,PRC),%VAR%_NCAP(REG,T,P%SOW%)));
+
+  %EQ%E_ZORCAP(RTP_CPTYR(ZR0(R),V,T,P)%SWT%)$(VNTRT(V,T)$RT_ZON(R,T)$PRC_RCAP(R,P)+MIYR_1(T)$NCAP_PASTI(R,V,P))..
+    %VAR%_SCAP(R,V,T,P%SOW%)$PRC_RCAP(R,P) =E= SUM(ZRSR(R,REG),%VAR%_SCAP(REG,V,T,P%SOW%)$PRC_RCAP(REG,P));
+
+  %EQ%E_ZONCAPSH(RTP(ZRZ(R),T,P)%SWT%)$((NOT RT_ZON(R,T))$ZCAP_SHAR(R,T,P,'FX'))..
+    %VAR%_NCAP(R,T,P%SOW%) =E= ZCAP_SHAR(R,T,P,'FX')*SUM(ZRSR(REG,R),%VAR%_NCAP(REG,T,P%SOW%));
+
+  %EQ%L_ZONCAPSH(RTP(ZRZ(R),T,P),BDNEQ(BD)%SWT%)$((RT_ZON(R,T)->YES$NCAP_PASTI(R,T,P))$ZCAP_SHAR(R,T,P,BD))..
+    (%VAR%_NCAP(R,T,P%SOW%)+NCAP_PASTI(R,T,P))*BDSIG(BD) =G= ZCAP_SHAR(R,T,P,BD)*SUM(ZRSR(REG,R),%VAR%_NCAP(REG,T,P%SOW%)+NCAP_PASTI(REG,T,P))*BDSIG(BD);

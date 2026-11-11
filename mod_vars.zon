@@ -1,0 +1,80 @@
+*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+* Copyright (C) 2000-2023 Energy Technology Systems Analysis Programme (ETSAP)
+* This file is part of the IEA-ETSAP TIMES model generator, licensed
+* under the GNU General Public License v3.0 (see file NOTICE-GPLv3.txt).
+*-----------------------------------------------------------------------------
+* mod_vars.zon - Extension for period-wise Region Zooming
+$IFI '%1'==BOUND $GOTO %1
+*-----------------------------------------------------------------------------
+* Zoom-in equations
+  EQUATIONS
+  %EQ%E_ZONACT(R,ALLYEAR,P,S%SWTD%)         'Process activity zoom'
+  %EQ%E_ZONFLO(R,ALLYEAR,P,C,S,IO%SWTD%)    'Process flow zoom'
+  %EQ%E_ZONCOM(R,ALLYEAR,C,S,LIM%SWTD%)     'Commodity zoom'
+  %EQ%E_ZONCAP(R,ALLYEAR,P%SWTD%)           'New capacity zoom'
+  %EQ%E_ZORCAP(R,ALLYEAR,ALLYEAR,P%SWTD%)   'Retired capacity zoom'
+  %EQ%E_ZONCAPSH(R,ALLYEAR,P%SWTD%)         'New capacity shares FX'
+  %EQ%L_ZONCAPSH(R,ALLYEAR,P,BD%SWTD%)      'New capacity shares UP/LO'
+  ;
+*-----------------------------------------------------------------------------
+* Prepare for sub-region cross-elastic demand curves
+$IF DEFINED DAM_ELAST TRACKC(DEM(R,C))$DAM_ELAST(R,C,'N')=YES;
+  IF(CARD(TRACKC),
+    RD_NLP(TRACKC(ZRZ,C)) = 1;
+    DAM_TQTY(RTC(ZRZ(R),T,C))$TRACKC(R,C) = COM_PROJ(R,T,C);
+    DAM_ELAST(TRACKC(ZRZ(R),C),'N')$DEM(R,C) = -1;
+    DAM_ELAST(ZRZ(R),C,BDNEQ)$((NOT DAM_ELAST(R,C,BDNEQ))$DEM(R,C)) = 1;
+    DAM_STEP(ZRZ(R),C,BDNEQ)$((NOT DAM_STEP(R,C,BDNEQ))$DEM(R,C)) = 5;
+    DAM_VOC(TRACKC(ZRZ(R),C),'N')$((NOT DAM_VOC(R,C,'N'))$DEM(R,C)) = 0.06);
+  VAR_DEM.LO(RTC(ZRZ(R),T,C))$((NOT TRACKC(R,C))$RT_ZON(R,T)$DEM(R,C)) = COM_PROJ(R,T,C);
+  OPTION CLEAR=TRACKC;
+*-----------------------------------------------------------------------------
+* Remove Bound attributes from Sub-regions when not active
+  ACT_BND(ZRZ(R),T,P,S,BD)$(NOT RT_ZON(R,T)) = 0;
+  FLO_BND(ZRZ(R),T,P,CG,S,BD)$(NOT RT_ZON(R,T)) = 0;
+  STGIN_BND(ZRZ(R),T,P,C,S,BD)$(NOT RT_ZON(R,T)) = 0;
+  STGOUT_BND(ZRZ(R),T,P,C,S,BD)$(NOT RT_ZON(R,T)+RPS_STG(R,P,'ANNUAL')) = 0;
+  COM_BNDNET(ZRZ(R),T,C,S,BD)$(NOT RT_ZON(R,T)) = 0;
+  COM_BNDPRD(ZRZ(R),T,C,S,BD)$(NOT RT_ZON(R,T)) = 0;
+  REG_BNDCST(ZRZ(R),T,COSTAGG,CUR,BD)$(NOT RT_ZON(R,T)) = 0;
+  REG_CUMCST(ZRZ,YEAR,ALLYEAR,COSTAGG,CUR,BD) = 0;
+* Copy OFF periods to subregions
+  LOOP(Z0RZ(REG),RTPS_OFF(R,T,P,S)$(RTPS_OFF(REG,T,P,S)$ZRSR(REG,R))=YES);
+*-----------------------------------------------------------------------------
+* Subregion clearing
+$ macro ztp_ncap(r,t,p) ztp_pasti(r,t,p)
+$ macro SR_Rcap(r,p) ztp_pasti(r,'0',p)
+  RTPCS_VARF(ZRZ(R),T,P,C,S)$(NOT RT_ZON(R,T)) = NO;
+  RTP_VARA(ZRZ(R),T,P)$(NOT RT_ZON(R,T)) = NO;
+  RTPC(ZRZ(R),T,P,C)$(NOT RT_ZON(R,T)) = NO;
+* Commodities may be supported
+* RTCS_VARC(ZRZ(R),T,C,S)$(NOT RT_ZON(R,T)) = NO;
+* RTC(ZRZ(R),T,C)$(NOT RT_ZON(R,T)) = NO;
+* Assume we can take RTP_VINTYR off as well (in view of OBJVAR)?
+  RTP_VINTYR(ZRZ(R),V,T,P)$((NOT RT_ZON(R,T))$RP_STD(R,P)) = NO;
+  ZTP_PASTI(ZRZ(R),T,P) $= NCAP_PASTI(R,T,P);
+  LOOP((RTP(R(Z0RZ),T,P),BD)$NCAP_BND(R,T,P,BD),RVP(R,T,P)=YES);
+  LOOP(ZRSR(REG,R),TRACKP(REG,P)$RP(R,P)=YES); NO_ACT(TRACKP)$(NOT RP(TRACKP))=YES;
+  ZTP_NCAP(ZR0(R),T,P)$((NOT RT_ZON(R,T))$(RVP(R,T,P)+SUM((ZRSR(R,REG),PRC)$PRC_REFIT(REG,P,PRC),NO_ACT(R,PRC)))) = YES;
+  OPTION CLEAR=TRACKP,CLEAR=RVP;
+* Set zero Bounds for incative Sub-regions directly on variables
+$LABEL BOUND
+$IF %STAGES% == YES $SETLOCAL SWT SW_T(T%SWD%)$
+  LOOP(ZRSR(REG,R),
+    %VAR%_ACT.UP(R,V,T,P,S%SWD%)$(%SWT%(NOT RTP_VARA(R,T,P)$PRC_TS(R,P,S))$RTP_VINTYR(REG,V,T,P)$PRC_TS(REG,P,S)) = EPS;
+    %VAR%_IRE.UP(R,V,T,P,C,S,IE%SWD%)$(%SWT%(NOT RTPCS_VARF(R,T,P,C,S))$RTP_VINTYR(REG,V,T,P)$RTPCS_VARF(REG,T,P,C,S)$RP_IRE(R,P)) = EPS;
+    %VAR%_FLO.UP(R,V,T,P,C,S%SWD%)$(%SWT%(NOT RTPCS_VARF(R,T,P,C,S))$RTP_VINTYR(REG,V,T,P)$RTPCS_VARF(REG,T,P,C,S)$RP_STD(R,P)) = EPS;
+    %VAR%_COMNET.UP(R,T,C,S%SOW%)$(%SWT%(NOT RTCS_VARC(R,T,C,S))$RTCS_VARC(REG,T,C,S)) = EPS;
+    %VAR%_COMPRD.UP(R,T,C,S%SOW%)$(%SWT%(NOT RTCS_VARC(R,T,C,S))$RTCS_VARC(REG,T,C,S)) = EPS;
+    %VAR%_SCAP.UP(R,V,T,P%SOW%)$(%SWT%(NOT RTP_CPTYR(R,V,T,P))$RTP_CPTYR(REG,V,T,P)$PRC_RCAP(R,P)) = EPS;
+    %VAR%_NCAP.UP(R,T,P%SOW%)$(%SWT%(NOT RT_ZON(R,T)+RTP(REG,T,P))$PRC_CAP(R,P)) = EPS;
+  );
+* NCAP/RCAP bounds for PASTI vintages
+  ZRT_PP(R,T)=RT_PP(R,T);
+  LOOP(ZTP_PASTI(ZR0(REG),T,P),Z=NCAP_PASTI(REG,T,P);
+    NCAP_BND(ZRZ(R),T,P,'LO')$(ZCAP_SHAR(R,T,P,'LO')$ZRSR(REG,R))=MIN(0,Z*ZCAP_SHAR(R,T,P,'LO')-NCAP_PASTI(R,T,P)));
+  LOOP((RTP(ZR0(REG),PASTMILE(V),P),T(MIYR_1)),Z=COEF_CPT(REG,V,T,P)*(NCAP_PASTI(REG,V,P)-RTFORC(REG,V,T,P));
+    ZCAP_SHAR(ZRZ(R),V,P,'LO')$((NOT RCAP_BND(REG,T,P,'UP'))$ZRSR(REG,R)$PRC_RCAP(REG,P)) = 0;
+    %VAR%_SCAP.LO(RTP_CPTYR(ZRZ(R),V,TT,P)%SOW%)$(ZCAP_SHAR(R,V,P,'UP')$ZRSR(REG,R))=MIN(0,COEF_CPT(R,V,T,P)*(NCAP_PASTI(R,T,P)-RTFORC(R,V,T,P))-Z*ZCAP_SHAR(R,V,P,'UP'));
+    %VAR%_SCAP.UP(RTP_CPTYR(ZRZ(R),V,TT,P)%SOW%)$(ZCAP_SHAR(R,V,P,'LO')$ZRSR(REG,R))=MAX(RTFORC(R,V,TT,P),COEF_CPT(R,V,T,P)*(NCAP_PASTI(R,T,P)-RTFORC(R,V,T,P))-Z*ZCAP_SHAR(R,V,P,'LO')));
+

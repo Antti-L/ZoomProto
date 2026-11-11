@@ -1,0 +1,42 @@
+*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+* Copyright (C) 2000-2023 Energy Technology Systems Analysis Programme (ETSAP)
+* This file is part of the IEA-ETSAP TIMES model generator, licensed
+* under the GNU General Public License v3.0 (see file NOTICE-GPLv3.txt).
+*-----------------------------------------------------------------------------
+* INIT_ext.zon - Extension for period-wise Region Zooming
+*-----------------------------------------------------------------------------
+* Prevent PGACT recuction for all IRE of Zoomed regions ***** ? Not needed ? *****
+  LOOP(RP_IRE(REG,P)$Z0RZ(REG),
+    RP_PGACT(REG,P) = NO; RP_PGACT(R,P)$ZRSR(REG,R) = NO);
+
+*-------------------------------------------------------------------------------
+* Handle fixes to previous solution
+* Assumption is that sub-regions never expected to be fixed to previous solution
+  REG_FIXT(ZRZ) = MIYR_BOH;
+  REG_BDNCAP(ZRZ,BD) = 0;
+*-------------------------------------------------------------------------------
+* Expand COM_PROJ downscaling coefficients
+  OPTION CLEAR=RXX, DEM < COM_PROJ;
+  LOOP(Z0RZ(REG),DEM(R,C)$ZRSR(REG,R) $= DEM(REG,C));
+  LOOP((R,T,CG)$ZOOM_SHAR(R,T,CG,'N'),RXX(COM_GMAP(R,CG,C))$DEM(R,C)=YES);
+  LOOP(RXX(R,CG('DEM'),C),ZOOM_SHAR(RTC(R,T,C),'N')$(NOT ZOOM_SHAR(R,T,C,'N')) = ZOOM_SHAR(R,T,CG,'N'));
+  LOOP(RXX(R,CG,C)$(NOT SUM(RC(R,COM(CG)),1)),ZOOM_SHAR(RTC(R,T,C),'N')$(NOT ZOOM_SHAR(R,T,C,'N')) = ZOOM_SHAR(R,T,CG,'N'));
+* Perform Downscaling of COM_PROJ
+  ZOOM_SHAR(R,T,C,'N')$COM_PROJ(R,T,C) = 0;
+  MI_DOPE(RTC(ZR0(R),T,C))$COM_PROJ(R,T,C) = SUM(ZRSR(R,REG)$(NOT COM_PROJ(REG,T,C)),1$(NOT ZOOM_SHAR(REG,T,C,'N')));
+  LOOP(RTC(REG(Z0RZ),T,C)$COM_PROJ(REG,T,C),Z=MAX(0,1-SUM(ZRSR(REG,R)$(NOT COM_PROJ(R,T,C)),ZOOM_SHAR(R,T,C,'N'))); MI_DOPE(R,T,C)$ZRSR(REG,R)=Z);
+  LOOP(ZRSR(REG,R),ZOOM_SHAR(RTC(R,T,C),'N')$COM_PROJ(REG,T,C) = 
+    (ZOOM_SHAR(R,T,C,'N')+(1/MI_DOPE(REG,T,C)*MI_DOPE(R,T,C))$(NOT ZOOM_SHAR(R,T,C,'N')))$((NOT COM_PROJ(R,T,C))$MI_DOPE(REG,T,C)) +
+    ((COM_PROJ(R,T,C)/COM_PROJ(REG,T,C))$(NOT MI_DOPE(R,T,C))+ZOOM_SHAR(R,T,C,'N')$(NOT COM_PROJ(R,T,C)))$(NOT MI_DOPE(REG,T,C)));
+  MI_DOPE(RTC(ZR0(R),T,C))$COM_PROJ(R,T,C) = SUM(ZRSR(R,REG),ZOOM_SHAR(REG,T,C,'N'))+1-1;
+  MI_DOPE(RTC(ZR0(R),T,C))$MI_DOPE(RTC) = MAX(0,COM_PROJ(RTC)-SUM(ZRSR(R,REG),COM_PROJ(REG,T,C)))/MI_DOPE(RTC);
+  LOOP(ZRSR(REG,R),
+    COM_PROJ(RTC(R,T,C))$(ZOOM_SHAR(R,T,C,'N')$MI_DOPE(REG,T,C)) = MI_DOPE(REG,T,C)*ZOOM_SHAR(R,T,C,'N'));
+  OPTION CLEAR=RXX,CLEAR=MI_DOPE;
+*-------------------------------------------------------------------------------
+* Prepare for demand elasticities
+$IF DEFINED DAM_COST LOOP((ZRZ(R),T,C,CUR)$DAM_COST(R,T,C,CUR),DAM_ELAST(DEM(R,C),'N') = -1);
+$IF NOT DEFINED SOL_BPRICE $EXIT
+  OPTION TRACKC < SOL_BPRICE;
+  LOOP(Z0RZ(REG),SOL_BPRICE(RTC(R,T,C),S,CUR)$(NOT TRACKC(R,C)) $= SOL_BPRICE(REG,T,C,S,CUR));
+  OPTION CLEAR=TRACKC;

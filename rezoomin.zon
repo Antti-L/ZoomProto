@@ -1,0 +1,77 @@
+*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+* Copyright (C) 2000-2023 Energy Technology Systems Analysis Programme (ETSAP)
+* This file is part of the IEA-ETSAP TIMES model generator, licensed
+* under the GNU General Public License v3.0 (see file NOTICE-GPLv3.txt).
+*-----------------------------------------------------------------------------
+* rezoomin.zon - Extension for period-wise Region Zooming
+*-----------------------------------------------------------------------------
+* Currently Spines not supported
+$IFI %SPINES%==YES $ABORT Spines currently not supported with Zoom
+*-----------------------------------------------------------------------------
+  RVT(R,VNT(V,T))$RT_PP(R,T) = YES;
+  ZRT_PP(R,T)=RT_PP(R,T); RT_PP(RT_PP)=RT_ZON(RT_PP); RVT(RVT(R,V,T))=RT_PP(R,T);
+  RTPX(RTP(R,T,P))$RP_IRE(R,P)=YES;
+
+$SET VSUM SUM(SW_TSW(SOW,
+$SETGLOBAL SW_STVARS SET VAR "Z" SET VART 'Z' SET VARTT 'Z' SET VARM 'Z' SET VARV 'Z' SET VAS 'VAR' SET BRT Z
+$SETGLOBAL VARMAC Z==Z
+
+* Variable macroes
+
+$macro Z_OBJ     %VAR%_OBJ
+$macro Z_OBJELS  %VAR%_OBJELS
+* user constraints
+$macro Z_UC      %VAR%_UC
+$macro Z_UCR     %VAR%_UCR
+$macro Z_UCT     %VAR%_UCT
+$macro Z_UCRT    %VAR%_UCRT
+$macro Z_UCTS    %VAR%_UCTS
+$macro Z_UCRTS   %VAR%_UCRTS
+* cumulative
+$macro Z_CUMCOM  %VAR%_CUMCOM
+$macro Z_CUMFLO  %VAR%_CUMFLO
+$macro Z_CUMCST  %VAR%_CUMCST
+* periodic flows
+$macro Z_ACT(r,v,t,p,s%SOW%)      SUM(RTREG(r,t,rgn,bd),%VAR%_ACT(rgn,v,t,p,s%SOW%))
+$macro Z_FLO(r,v,t,p,c,s%SOW%)    SUM(RTREG(r,t,rgn,bdupx),%VAR%_FLO(rgn,v,t,p,c,s%SOW%))
+$macro Z_IRE(r,v,t,p,c,s,ie%SOW%) SUM(RTREG(r,t,rgn,bdupx),%VAR%_IRE(rgn,v,t,p,c,s,ie%SOW%))
+$macro Z_SIN(r,v,t,p,c,s%SOW%)    SUM(RTREG(r,t,rgn,bdupx),%VAR%_SIN(rgn,v,t,p,c,s%SOW%))
+$macro Z_SOUT(r,v,t,p,c,s%SOW%)   SUM(RTREG(r,t,rgn,bdupx),%VAR%_SOUT(rgn,v,t,p,c,s%SOW%))
+*$macro Z_COMNET(r,t,c,s%SOW%)    SUM(RTREG(r,t,rgn,lnx),%VAR%_COMNET(rgn,t,c,s%SOW%))
+*$macro Z_COMPRD(r,t,c,s%SOW%)    SUM(RTREG(r,t,rgn,lnx),%VAR%_COMPRD(rgn,t,c,s%SOW%))
+* Refinement (not tested)
+$macro Z_COMNET(r,t,c,s%SOW%)     SUM(RTREG(r,t,rgn,lnx),%VAR%_COMNET(rgn,t,c,s%SOW%)*ZOOM_SHAR(r,t,c,lnx)**1$ZRSR(rgn,r)+(%VAR%_COMPRD(r,t,c,s%SOW%)$(NOT ZOOM_SHAR(R,T,C,LNX))$ZRSR(rgn,r)))
+$macro Z_COMPRD(r,t,c,s%SOW%)     SUM(RTREG(r,t,rgn,lnx),%VAR%_COMPRD(rgn,t,c,s%SOW%)*ZOOM_SHAR(r,t,c,lnx)**1$ZRSR(rgn,r)+(%VAR%_COMPRD(r,t,c,s%SOW%)$(NOT ZOOM_SHAR(R,T,C,LNX))$ZRSR(rgn,r)))
+$macro Z_DEM(r,t,c%SOW%)          SUM(RTREG(r,t,rgn,bdupx),%VAR%_DEM(rgn,t,c%SOW%))
+$macro Z_DAM(r,t,c,bd,j%SOW%)     SUM(RTREG(r,t,rgn,bdupx),%VAR%_DAM(rgn,t,c,bd,j%SOW%))
+* capacity
+$macro Z_CAP(r,t,p%SOW%)          SUM(RTREG(r,t,rgn,bd),%VAR%_CAP(rgn,t,p%SOW%))
+$macro Z_NCAP(r,t,p%SOW%)        (SUM(RTREG(r,t,rgn,bd),%VAR%_NCAP(rgn,t,p%SOW%))$(NOT ZTP_NCAP(r,t,p))+%VAR%_NCAP(r,t,p%SOW%)$ZTP_NCAP(r,t,p))
+$macro Z_RCAP(r,v,t,p%SOW%)       SUM(RTREG(r,t,rgn,bd),%VAR%_RCAP(rgn,v,t,p%SOW%))
+$macro Z_SCAP(r,v,t,p%SOW%)       SUM(RTREG(r,t,rgn,bd),%VAR%_SCAP(rgn,v,t,p%SOW%))
+$macro Z_DRCAP(r,v,t,p%SOW%,j)    SUM(RTREG(r,t,rgn,bd),%VAR%_DRCAP(rgn,v,t,p%SOW%,j))
+$macro Z_DNCAP(r,t,p%SOW%,j)      SUM(RTREG(r,t,rgn,bd),%VAR%_DNCAP(rgn,t,p%SOW%,j))
+$macro Z_SNCAP(r,t,p%SOW%)        SUM(RTREG(r,t,rgn,bd),%VAR%_SNCAP(rgn,t,p%SOW%))
+* extensions
+$macro Z_LAMBD(r,t,p,kp%SOW%)     SUM(RTREG(r,t,rgn,bd),%VAR%_LAMBD(rgn,t,p,kp%SOW%))
+$macro Z_CCAP(r,t,p%SOW%)         SUM(RTREG(r,t,rgn,bd),%VAR%_CCAP(rgn,t,p%SOW%))
+$macro Z_CCOST(r,t,p%SOW%)        SUM(RTREG(r,t,rgn,bd),%VAR%_CCOST(rgn,t,p%SOW%))
+$macro Z_IC(r,t,p%SOW%)           SUM(RTREG(r,t,rgn,bd),%VAR%_IC(rgn,t,p%SOW%))
+$macro Z_DELTA(r,t,p,kp%SOW%)     SUM(RTREG(r,t,rgn,bd),%VAR%_DELTA(rgn,t,p,kp%SOW%))
+$macro Z_XCAP(r,t,g%SOW%)         SUM(RTREG(r,t,rgn,bd),%VAR%_XCAP(rgn,t,g%SOW%))
+* period variables that should not be referred to from other periods
+$macro Z_BLND         %VAR%_BLND
+$macro Z_ELAST        %VAR%_ELAST
+$macro Z_UPS          %VAR%_UPS
+$macro Z_UPT          %VAR%_UPT
+$macro Z_UDP          %VAR%_UDP
+$macro Z_RLD          %VAR%_RLD
+$macro Z_GRIDIO       %VAR%_GRIDELC
+$macro Z_COMAUX       %VAR%_COMAUX
+$macro Z_COMLV        %VAR%_COMLV
+$macro Z_BSPRS        %VAR%_BSPRS
+$macro Z_GG_PR        %VAR%_GG_PR
+$macro Z_GG_MF        %VAR%_GG_MF
+$macro Z_GG_PDIF      %VAR%_GG_PDIF
+$macro Z_GG_PADD      %VAR%_GG_PADD
+$macro Z_GG_STEP      %VAR%_GG_STEP
