@@ -25,6 +25,7 @@
 *.tm  linguist-language=GAMS
 *.v3  linguist-language=GAMS
 *.vda linguist-language=GAMS
+*.zon linguist-language=GAMS
 
 # These files are binary and should be left untouched
 # (binary is a macro for -text -diff)
